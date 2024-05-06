@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Make sure to recomplie the files from scratch
+rm -rf temp
+
+# Run tests
+npx ava
+
+# Delete the test files
+rm -rf temp

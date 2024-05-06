@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Clearing the dist folder
+rm -rf dist
+
+# Compiling each file listed in apiFiles.txt
+files=(
+    "sharedCode"
+    "api"
+    "appSettingsChange"
+    "appStart"
+    "appStop"
+    "broadcastStart"
+    "broadcastStop"
+    "broadcastPanelUpdate"
+    "callback"
+    "chatMessage"
+    "chatMessageTransform"
+    "fanclubJoin"
+    "mediaPurchase"
+    "roomStatusChange"
+    "tipDialogOpen"
+    "tipReceived"
+    "userEnter"
+    "userFollow"
+    "userLeave"
+    "userUnfollow"
+)
+printf "src/%s.ts\n" "${files[@]}" | xargs npx babel --out-dir dist --extensions '.ts'
+cp "src/broadcastPanel.html" "dist/broadcastPanel.html"
+
+# Delete empty files from the dist folder
+find dist/ -type f -empty -delete

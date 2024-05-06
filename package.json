@@ -1,0 +1,51 @@
+{
+  "name": "cb2-devkit",
+  "version": "1.0.0",
+  "description": "Develop, test, and compile apps for the Chaturbate App v2 platform, all locally.",
+  "main": "index.js",
+  "scripts": {
+    "clean": "script/clean",
+    "build": "script/build",
+    "libs": "script/libs",
+    "test": "script/test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/recursivedesire/Chaturbate-AppV2-DevKit.git"
+  },
+  "keywords": [
+    "chaturbate",
+    "app",
+    "typescript",
+    "devkit"
+  ],
+  "author": "recursivedesire",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/issues"
+  },
+  "homepage": "https://github.com/recursivedesire/Chaturbate-AppV2-DevKit#readme",
+  "devDependencies": {
+    "@ava/typescript": "^4.1.0",
+    "@babel/cli": "^7.22.10",
+    "@babel/core": "^7.22.10",
+    "@babel/parser": "^7.22.10",
+    "@babel/preset-env": "^7.22.10",
+    "@babel/preset-typescript": "^7.22.5",
+    "@sindresorhus/tsconfig": "^5.0.0",
+    "@types/node": "^20.4.10",
+    "@types/proxyquire": "^1.3.28",
+    "ava": "^6.1.2",
+    "proxyquire": "^2.1.3",
+    "typescript": "^5.1.6",
+    "terser": "^5.31.0"
+  },
+  "ava": {
+    "typescript": {
+      "compile": "tsc",
+      "rewritePaths": {
+        "src/": "temp/"
+      }
+    }
+  }
+}

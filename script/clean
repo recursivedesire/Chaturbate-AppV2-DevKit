@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Clearing the dist folder
+rm -rf dist
