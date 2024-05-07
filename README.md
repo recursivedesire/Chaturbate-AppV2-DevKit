@@ -16,7 +16,7 @@ For comprehensive documentation, including setup, API details, and testing instr
 ## Features
 ### Core Features
 - **TypeScript Integration**: Utilize TypeScript with custom Babel plugins tailored for the Chaturbate App v2 platform:
-  - **devportal-compat-plugin**: Ensures all necessary code is available in a single bundled file by stripping unnecessary imports and inlining modules. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/DevPortal-Compat).
+  - **devportal-compat-plugin**: Ensures all necessary code is available in bundled event-listener files by stripping unnecessary imports and inlining modules. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/DevPortal-Compat).
   - **macro-plugin**: Introduces compile-time TypeScript macro execution, allowing developers to execute code during the build process and directly replace function calls with their results. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Macros).
 - **Local API Definitions**: Local TypeScript definitions of the Chaturbate App v2 API, primed for development and testing.
 - **AVA-powered Unit Testing**: Robust testing framework integration using AVA and TSC, allowing for effective unit tests. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Testing).
