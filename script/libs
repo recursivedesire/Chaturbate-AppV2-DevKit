@@ -7,10 +7,10 @@ rm -rf dist/libs
 mkdir -p dist/libs
 
 # Compiling TypeScript files in the src/libs directory
-find src/libs/ -name "*.ts" -print0 | xargs -0 npx babel --out-dir dist/libs --extensions '.ts'
+find src/libs/ -name "*.ts" -not -name "*.test.ts" -print0 | xargs -0 npx babel --out-dir dist/libs --extensions '.ts'
 
 # Minify the compiled JS files with non-aggressive settings
-find dist/libs/ -name "*.js" -print0 | xargs -0 -I {} npx terser {} --compress --mangle false --keep-classnames --keep-fnames --output {}
+find dist/libs/ -name "*.js" -print0 | xargs -0 -I {} npx terser {} --compress --keep-classnames --keep-fnames --output {}
 
 # Delete empty files from the dist/libs folder
 find dist/libs/ -type f -empty -delete

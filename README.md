@@ -9,7 +9,7 @@ Develop, test, and compile apps for the Chaturbate App v2 platform, all locally.
 - [License](#license)
 
 ## Introduction
-Chaturbate-AppV2-DevKit provides a streamlined solution for developing apps for the Chaturbate App v2 platform using the v0.52.0 API. Write and test with TypeScript, then compile to JavaScript for deployment.
+Chaturbate-AppV2-DevKit provides a streamlined solution for developing apps for the Chaturbate App v2 platform using the v0.73.0 API. Write and test with TypeScript, then compile to JavaScript for deployment.
 
 For comprehensive documentation, including setup, API details, and testing instructions, please visit the [DevKit Wiki](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki).
 
@@ -29,7 +29,7 @@ For comprehensive documentation, including setup, API details, and testing instr
 - **Template Engine**: Dynamic string rendering with support for placeholders, conditional logic, and recursive templates. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Template-Engine).
 
 ## REPL
-Upcoming REPL console for local app testing will simulate the Chaturbate App v2 platform's experience using the v0.52.0 API, providing a robust testing environment without deploying your apps.
+Upcoming REPL console for local app testing will simulate the Chaturbate App v2 platform's experience using the v0.73.0 API, providing a robust testing environment without deploying your apps.
 
 ## Contribution
 All forms of contributions are welcome! If you have ideas for improvements or want to collaborate, please open an issue or submit a pull request.

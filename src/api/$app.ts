@@ -17,14 +17,8 @@ export declare class AppInfo {
     /** Description of app. */
     readonly description: string;
 
-    /** Can be used to emit events to web components. This method is available only in event handlers */
-    emit(eventName: string, payload: any): void;
-
     /** Name of app. */
     readonly name: string;
-
-    /** Can be used to receive events in web components. This method is available only in web components. */
-    on(eventName: string, callback: (payload: any) => void): void;
 
     /** Object displays values of broadcaster's permissions. */
     readonly permission: AppPermissions;

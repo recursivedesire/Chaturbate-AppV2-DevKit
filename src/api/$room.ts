@@ -54,6 +54,12 @@ export declare class Room {
     /** Room username (broadcaster). */
     readonly owner: string;
 
+    /**
+     * A string describing the gender of the room owner (broadcaster).
+     * Possible values: m, f, c, t
+     */
+    readonly ownerGender: "m"|"f"|"c"|"t";
+
     /** Shows if the room allows private shows. True if the room allows private shows, false if not. */
     readonly psEnabled: boolean;
 
