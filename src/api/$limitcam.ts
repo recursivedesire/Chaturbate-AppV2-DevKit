@@ -15,7 +15,7 @@ export declare class Limitcam {
      * Add users to the allow-list.
      * @param users An array of usernames that should be added to the allow-list of users who can see the cam during a Limitcam session.
      */
-    add(users: string[]);
+    add(users: string[]): void;
 
     /**
      * Check if a user is in the allow-list.
@@ -27,20 +27,20 @@ export declare class Limitcam {
      * Remove users from the allow-list.
      * @param users An array of usernames that should be removed from the allow-list of users who can see the cam during a Limitcam session.
      */
-    remove(users: string[]);
+    remove(users: string[]): void;
 
     /** Remove all users from the allow-list. */
-    removeAll();
+    removeAll(): void;
 
     /**
      * Start the Limitcam show.
      * @param message A message displayed on the cam for users that can't see it, eg "Limitcam session in progress".
      * @param users An array of usernames that should be able to see the cam during the Limitcam session. Defaults to [].
      */
-    start(message: string, users?: string[]);
+    start(message: string, users?: string[]): void;
 
     /** Stop the Limitcam show. */
-    stop();
+    stop(): void;
 }
 
 export declare const $limitcam: Limitcam;

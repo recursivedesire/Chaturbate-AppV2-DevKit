@@ -1,0 +1,3 @@
+class ReExported {}
+
+export { ReExported };

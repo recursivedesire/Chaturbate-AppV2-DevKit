@@ -15,7 +15,7 @@ export declare class KvIterator {
      * Moves the cursor to the specified key.
      * @param key The key to seek to.
      */
-    seek(key: string);
+    seek(key: string): void;
 
     /**
      * Deletes the current entry.
@@ -66,7 +66,7 @@ export declare class KV {
      * Remove a key and value.
      * @param key The storage key to be removed from storage.
      */
-    remove(key: string);
+    remove(key: string): void;
 
     /**
      * Store a value on a key.

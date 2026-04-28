@@ -28,32 +28,32 @@ export declare class Message {
      * Set message background color.
      * @param color Any valid hexadecimal color or any valid CSS color name
      */
-    setBgColor(color: string);
+    setBgColor(color: string): void;
 
     /**
      * Set body (text) of the message.
      * @param body The text of the message.
      */
-    setBody(body: string);
+    setBody(body: string): void;
 
     /**
      * Set message color.
      * @param color Any valid hexadecimal color or any valid CSS color name
      */
-    setColor(color: string);
+    setColor(color: string): void;
 
     /**
      * Set message font.
      * @param font Any valid available font.
      *     Possible values: Default, Arial, Bookman Old Style, Comic Sans, Courier, Lucida, Palantino, Tahoma, Times New Roman
      */
-    setFont(font: "Default"|"Arial"|"Bookman Old Style"|"Comic Sans"|"Courier"|"Lucida"|"Palantino"|"Tahoma"|"Times New Roman");
+    setFont(font: "Default"|"Arial"|"Bookman Old Style"|"Comic Sans"|"Courier"|"Lucida"|"Palantino"|"Tahoma"|"Times New Roman"): void;
 
     /**
      * Set whether the message is marked as spam.
      * @param isSpam Boolean indicating if message is spam.
      */
-    setSpam(isSpam: boolean);
+    setSpam(isSpam: boolean): void;
 }
 
 export declare const $message: Message;

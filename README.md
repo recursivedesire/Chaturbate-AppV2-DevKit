@@ -1,39 +1,70 @@
-# Chaturbate-AppV2-DevKit
-Develop, test, and compile apps for the Chaturbate App v2 platform, all locally.
+# Chaturbate AppV2 DevKit
 
-## Table of Contents
-- [Introduction](#introduction)
-- [Features](#features)
-- [REPL](#repl)
-- [Contribution](#contribution)
-- [License](#license)
+A local TypeScript workflow for building Chaturbate App v2 apps while staying close to the official web editor runtime model.
 
-## Introduction
-Chaturbate-AppV2-DevKit provides a streamlined solution for developing apps for the Chaturbate App v2 platform using the v0.73.0 API. Write and test with TypeScript, then compile to JavaScript for deployment.
+## What This Is
 
-For comprehensive documentation, including setup, API details, and testing instructions, please visit the [DevKit Wiki](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki).
+- The real runtime is still the official App v2 web editor (JavaScript tabs + runtime-provided globals).
+- This DevKit mirrors that model locally so you can write TypeScript, test, and compile before pasting output into DevPortal.
+- `src/*.ts` mirrors web editor tabs.
+- `src/api/*.ts` mirrors runtime globals/payloads as typed declarations.
 
-## Features
-### Core Features
-- **TypeScript Integration**: Utilize TypeScript with custom Babel plugins tailored for the Chaturbate App v2 platform:
-  - **devportal-compat-plugin**: Ensures all necessary code is available in bundled event-listener files by stripping unnecessary imports and inlining modules. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/DevPortal-Compat).
-  - **macro-plugin**: Introduces compile-time TypeScript macro execution, allowing developers to execute code during the build process and directly replace function calls with their results. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Macros).
-- **Local API Definitions**: Local TypeScript definitions of the Chaturbate App v2 API, primed for development and testing.
-- **AVA-powered Unit Testing**: Robust testing framework integration using AVA and TSC, allowing for effective unit tests. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Testing).
-- **Seamless TypeScript-to-JavaScript Compilation**: Easy compilation process facilitated by Babel, readying your code for deployment.
+Official API docs: <https://devportal.cb.dev/wiki/introduction>
 
-### Helper Libraries
-- **Command System**: Modular command management with dynamic registration, permission checks, and argument parsing. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Command-System).
-- **Data Processing**: Tools for data encoding, decoding, and hashing, optimized for performance and security. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Data-Processing).
-- **StorageKV**: Advanced key-value storage with features like namespaces and skip lists for efficient data management. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/StorageKV).
-- **Template Engine**: Dynamic string rendering with support for placeholders, conditional logic, and recursive templates. [Learn more](https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Template-Engine).
+## Quick Workflow
 
-## REPL
-Upcoming REPL console for local app testing will simulate the Chaturbate App v2 platform's experience using the v0.73.0 API, providing a robust testing environment without deploying your apps.
+```bash
+pnpm install
+pnpm test
+pnpm build
+```
 
-## Contribution
-All forms of contributions are welcome! If you have ideas for improvements or want to collaborate, please open an issue or submit a pull request.
+Then:
+
+1. Open `dist/`.
+2. Copy each generated event file into the matching DevPortal tab.
+3. Copy `dist/shared_code.js` into Shared Code.
+
+Notes:
+
+- Empty outputs are removed on purpose (`find dist/ -type f -empty -delete` in build script).
+- If an event file is missing in `dist/`, that source compiled to no runtime code.
+
+## Why Build Is Needed
+
+DevPortal App v2 runs in a constrained JS runtime (not a normal module runtime).
+The build process converts local module-style TypeScript into deployment-safe JS:
+
+- runtime compatibility normalization/inlining (`devportal-compat-plugin`, required)
+- optional compile-time expansion (`macro-plugin`) for cleaner source and smaller output in some patterns
+- ES target alignment via Babel config
+
+This is why imports/exports can look normal in `src/`, but output in `dist/` is flattened/normalized for runtime execution.
+
+## Minified Libs (Optional, Risk-Aware)
+
+Default build path is non-minified app output (`pnpm build`).
+Minified lib cache use is opt-in (`pnpm build:min`) and may be interpreted as obfuscation by platform terms.
+
+Use only if you accept that risk.
+
+Verification help:
+
+- [DEVKIT_LIB_HASHES.md](./DEVKIT_LIB_HASHES.md) lists minified lib MD5 hashes and canonical DevKit source paths.
+- Minified-injected comments include lib name, version, hash, and `src/libs/...` source path.
+
+## Documentation
+
+Canonical docs live in the GitHub wiki:
+
+- <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki>
+- Quickstart: <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Quickstart>
+- Web Editor Parity: <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Web-Editor-Parity>
+- Official API vs DevKit: <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Official-API-vs-DevKit>
+- Project Structure and Flow: <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Project-Structure-and-Flow>
+- Build Transforms: <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Build-Transforms>
+- Testing and Validation: <https://github.com/recursivedesire/Chaturbate-AppV2-DevKit/wiki/Testing-and-Validation>
 
 ## License
-This project is licensed under the MIT License. For more details, see the LICENSE file in our repository.
 
+MIT. See `LICENSE`.

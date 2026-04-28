@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -euo pipefail
+
+script/libs-min
+DEVKIT_USE_MIN_LIBS=1 script/build

@@ -1,0 +1,643 @@
+#!/usr/bin/env node
+
+const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const nodePath = require('node:path');
+const vm = require('node:vm');
+
+const {transformSync} = require('@babel/core');
+
+const REPO_ROOT = nodePath.resolve(__dirname, '..');
+const EXAMPLES_ROOT = nodePath.join(REPO_ROOT, 'examples');
+const LIBS_ROOT = nodePath.join(REPO_ROOT, 'src', 'libs');
+const API_ROOT = nodePath.join(REPO_ROOT, 'src', 'api');
+const BABEL_CONFIG = nodePath.join(REPO_ROOT, '.babelrc');
+const MACRO_PLUGIN = nodePath.join(REPO_ROOT, 'macro-plugin.js');
+
+function toPosix(filePath) {
+  return filePath.split(nodePath.sep).join('/');
+}
+
+function listDirectories(rootDir) {
+  const out = [rootDir];
+  const stack = [rootDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    const entries = fs.readdirSync(current, {withFileTypes: true});
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) {
+        continue;
+      }
+      const full = nodePath.join(current, entry.name);
+      out.push(full);
+      stack.push(full);
+    }
+  }
+
+  return out;
+}
+
+function ensureAliasLinks(rootDir) {
+  const dirs = listDirectories(rootDir);
+  const aliasTargets = [
+    {alias: 'libs', target: LIBS_ROOT},
+    {alias: 'api', target: API_ROOT},
+  ];
+
+  for (const dir of dirs) {
+    for (const aliasTarget of aliasTargets) {
+      const aliasPath = nodePath.join(dir, aliasTarget.alias);
+      if (fs.existsSync(aliasPath)) {
+        continue;
+      }
+
+      fs.cpSync(aliasTarget.target, aliasPath, {recursive: true});
+    }
+  }
+}
+
+function listExampleEntries(rootDir) {
+  const out = [];
+  const stack = [rootDir];
+  const entryPattern = /^\d{2}_[a-z0-9_]+\.ts$/;
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    const entries = fs.readdirSync(current, {withFileTypes: true});
+
+    for (const entry of entries) {
+      const full = nodePath.join(current, entry.name);
+      if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        stack.push(full);
+        continue;
+      }
+
+      if (entry.isFile() && entryPattern.test(entry.name)) {
+        out.push(full);
+      }
+    }
+  }
+
+  out.sort();
+  return out;
+}
+
+function compileWithProjectPipeline(entryPath) {
+  const source = fs.readFileSync(entryPath, 'utf8');
+  const result = transformSync(source, {
+    filename: entryPath,
+    sourceType: 'module',
+    configFile: BABEL_CONFIG,
+    babelrc: false,
+  });
+
+  if (!result || typeof result.code !== 'string') {
+    throw new Error(`No transformed code emitted for ${entryPath}`);
+  }
+
+  return result.code;
+}
+
+function compileMacroOnly(entryPath) {
+  const source = fs.readFileSync(entryPath, 'utf8');
+  const result = transformSync(source, {
+    filename: entryPath,
+    sourceType: 'module',
+    configFile: false,
+    babelrc: false,
+    presets: [
+      ['@babel/preset-env', {
+        targets: {node: 'current'},
+        modules: false,
+        loose: true,
+        exclude: [
+          'transform-modules-commonjs',
+          'transform-regenerator',
+          'transform-async-to-generator',
+          '@babel/plugin-transform-for-of',
+        ],
+      }],
+      '@babel/preset-typescript',
+    ],
+    plugins: [MACRO_PLUGIN],
+  });
+
+  if (!result || typeof result.code !== 'string') {
+    throw new Error(`No macro-only transformed code emitted for ${entryPath}`);
+  }
+
+  return {
+    source,
+    code: result.code,
+  };
+}
+
+function createKvMock() {
+  const store = new Map();
+
+  function createIterator(prefix) {
+    let keys = Array.from(store.keys()).filter((key) => key.startsWith(prefix)).sort();
+    let index = -1;
+    let currentKey = null;
+
+    return {
+      next() {
+        keys = keys.filter((key) => store.has(key));
+        index += 1;
+        if (index < keys.length) {
+          currentKey = keys[index];
+          return true;
+        }
+        currentKey = null;
+        return false;
+      },
+      key() {
+        return currentKey === null ? '' : currentKey;
+      },
+      value() {
+        return currentKey === null ? undefined : store.get(currentKey);
+      },
+      delete() {
+        if (currentKey === null) {
+          return false;
+        }
+        return store.delete(currentKey);
+      },
+    };
+  }
+
+  return {
+    set(key, value) {
+      store.set(String(key), value);
+      return true;
+    },
+    get(key, defaultValue) {
+      const normalized = String(key);
+      return store.has(normalized) ? store.get(normalized) : defaultValue;
+    },
+    remove(key) {
+      store.delete(String(key));
+    },
+    clear() {
+      store.clear();
+      return true;
+    },
+    incr(key, amount = 1) {
+      const normalized = String(key);
+      const current = Number(store.has(normalized) ? store.get(normalized) : 0);
+      store.set(normalized, current + amount);
+      return true;
+    },
+    decr(key, amount = 1) {
+      const normalized = String(key);
+      const current = Number(store.has(normalized) ? store.get(normalized) : 0);
+      store.set(normalized, current - amount);
+      return true;
+    },
+    iter(prefix = '') {
+      return createIterator(String(prefix));
+    },
+  };
+}
+
+function uniqueStrings(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items) {
+    const value = String(item);
+    if (value.length === 0 || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+function createLimitcamMock() {
+  let active = false;
+  let users = [];
+
+  const limitcam = {
+    get active() {
+      return active;
+    },
+    get users() {
+      return users.slice();
+    },
+    add(nextUsers) {
+      const merged = uniqueStrings(users.concat(Array.isArray(nextUsers) ? nextUsers : []));
+      users = merged;
+    },
+    hasAccess(username) {
+      return users.includes(String(username));
+    },
+    remove(nextUsers) {
+      const removeSet = new Set((Array.isArray(nextUsers) ? nextUsers : []).map((item) => String(item)));
+      users = users.filter((username) => !removeSet.has(username));
+    },
+    removeAll() {
+      users = [];
+    },
+    start(message, startUsers = []) {
+      active = true;
+      limitcam.__message = String(message);
+      users = [];
+      limitcam.add(startUsers);
+    },
+    stop() {
+      active = false;
+    },
+    __message: '',
+  };
+
+  return limitcam;
+}
+
+function createCallbackMock() {
+  const scheduled = [];
+
+  return {
+    label: '',
+    create(label, delay = 1, repeating = false) {
+      scheduled.push({
+        label: String(label),
+        delay: Number(delay),
+        repeating: Boolean(repeating),
+      });
+    },
+    cancel(label) {
+      const target = String(label);
+      for (let i = scheduled.length - 1; i >= 0; i -= 1) {
+        if (scheduled[i].label === target) {
+          scheduled.splice(i, 1);
+        }
+      }
+    },
+    __scheduled: scheduled,
+  };
+}
+
+function createRoomMock() {
+  const notices = [];
+  let subject = 'Welcome room';
+  let tipOptions = {label: 'Default', options: []};
+
+  const room = {
+    anonCount: 0,
+    chatAllowedBy: 'all',
+    fanclubPrice: 100,
+    followerCount: 25,
+    genders: ['f'],
+    owner: 'streamer',
+    ownerGender: 'f',
+    psEnabled: true,
+    psMinBalance: 0,
+    psMinTime: 5,
+    psPrice: 30,
+    psRecEnabled: true,
+    psSpyPrice: 10,
+    status: 'public',
+    get subject() {
+      return subject;
+    },
+    users: [
+      ['alice', 'f', 'f'],
+      ['bob', 'm', 'm'],
+    ],
+    reloadPanel() {
+      room.__panelReloads += 1;
+    },
+    sendNotice(message, options = {}) {
+      notices.push({message: String(message), options});
+    },
+    setPanelTemplate() {
+      return true;
+    },
+    setSubject(nextSubject) {
+      subject = String(nextSubject);
+    },
+    setTipOptions(nextOptions) {
+      tipOptions = nextOptions;
+      room.__tipOptions = tipOptions;
+    },
+    __notices: notices,
+    __tipOptions: tipOptions,
+    __panelReloads: 0,
+  };
+
+  return room;
+}
+
+function createMessageMock() {
+  return {
+    bgColor: '#FFFFFF',
+    body: '',
+    color: '#000000',
+    font: 'Default',
+    isSpam: false,
+    orig: '',
+    setBgColor(color) {
+      this.bgColor = String(color);
+    },
+    setBody(body) {
+      this.body = String(body);
+    },
+    setColor(color) {
+      this.color = String(color);
+    },
+    setFont(font) {
+      this.font = String(font);
+    },
+    setSpam(isSpam) {
+      this.isSpam = Boolean(isSpam);
+    },
+  };
+}
+
+function createTipMock() {
+  return {
+    tokens: 80,
+    message: 'Spin wheel',
+    isAnon: false,
+  };
+}
+
+function createUserMock() {
+  return {
+    colorGroup: 'f',
+    gender: 'f',
+    hasDarkMode: false,
+    hasTokens: true,
+    inFanclub: true,
+    fcAutoRenew: false,
+    inPrivateShow: false,
+    isBroadcasting: false,
+    isFollower: true,
+    isMod: false,
+    isOwner: false,
+    isSilenced: false,
+    isSpying: false,
+    language: 'en',
+    recentTips: 'some',
+    subgender: '',
+    username: 'Foo',
+  };
+}
+
+function createRuntimeContext() {
+  const runtimeGlobal = {
+    console,
+    $kv: createKvMock(),
+    $callback: createCallbackMock(),
+    $limitcam: createLimitcamMock(),
+    $message: createMessageMock(),
+    $room: createRoomMock(),
+    $tip: createTipMock(),
+    $user: createUserMock(),
+  };
+  runtimeGlobal.globalThis = runtimeGlobal;
+  return runtimeGlobal;
+}
+
+function executeCompiled(entryRelativePath, code) {
+  const context = createRuntimeContext();
+  vm.runInNewContext(code, context, {timeout: 2000});
+  return context;
+}
+
+function toPlain(value) {
+  if (typeof value === 'undefined') {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+function runtimeChecks() {
+  return new Map([
+    ['command_system/01_builder_basics.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_01__), {
+        active: false,
+        users: [],
+      });
+    }],
+    ['command_system/02_args_and_options.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_02__), {
+        startedActive: true,
+        startedUsers: ['alice', 'bob'],
+        afterAdd: ['alice', 'bob', 'charlie'],
+        afterRemove: ['alice', 'charlie'],
+        stoppedActive: false,
+      });
+      assert.strictEqual(g.$room.__notices.length, 1);
+    }],
+    ['command_system/03_permissions_visibility.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_03__), {
+        viewerAllowed: false,
+        ownerAllowed: true,
+        hiddenByDefault: true,
+        shownWhenRequested: true,
+        listDefault: ['status'],
+      });
+    }],
+    ['command_system/04_analysis_execute_analysis.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_04__), {
+        parseOk: true,
+        validateOk: true,
+        executable: true,
+        scheduled: {
+          seconds: 30,
+          repeat: true,
+        },
+        callbackCount: 1,
+        callbackLabel: 'limitcam:reminder',
+      });
+    }],
+    ['command_system/05_typed_factories.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_05__), {
+        badOk: false,
+        goodPreset: 'vip',
+        goodDuration: 45,
+        normalizedTag: 'night',
+        allowUsers: ['bob', 'charlie'],
+        notify: false,
+      });
+    }],
+    ['command_system/06_compile_time_value_intermediate.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_06__), {
+        format: 'runtime-only',
+        startMessage: 'started:2',
+        statusMessage: 'active=true users=2',
+      });
+    }],
+    ['command_system/07_compat_inlining_limitations.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_07__), {
+        sideEffect: 1,
+        allowed: 'alice: ACCESS',
+        blocked: 'bob: LOCKED',
+      });
+    }],
+    ['data_processing/01_base64_roundtrip.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_DATA_PROCESSING_01__), {
+        encoded: 'SGVsbG8gRGV2S2l0',
+        decoded: 'Hello DevKit',
+      });
+    }],
+    ['data_processing/02_hashing_and_composed_payload.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_DATA_PROCESSING_02__), {
+        digest: '2ubmstw',
+        tokenPrefix: 'eyJ2ZXJzaW9uIjox',
+        tokenLength: 68,
+      });
+    }],
+    ['storage_kv/01_core_kv.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_STORAGE_KV_01__), {
+        target: 500,
+        progress: 150,
+        remaining: 350,
+        winnerFallback: 'none',
+      });
+    }],
+    ['storage_kv/02_json_namespace_iterators.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_STORAGE_KV_02__), {
+        users: ['alice', 'bob', 'cara'],
+        topUser: 'cara',
+        topTokens: 320,
+        reminderAlice: 'hydrate',
+      });
+    }],
+    ['storage_kv/03_list_flows.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_STORAGE_KV_03__), {
+        beforeDefrag: [1, 3],
+        afterDefrag: [1, 3],
+        iterIds: [1, 3],
+      });
+    }],
+    ['storage_kv/04_map_flows.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_STORAGE_KV_04__), {
+        aliceMinutes: 30,
+        iterUsers: ['alice', 'bob'],
+        afterRemove: 'missing',
+        afterClear: 'missing',
+      });
+    }],
+    ['template_engine/01_numeric_and_named.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_TEMPLATE_ENGINE_01__), {
+        welcome: 'Welcome Foo to streamer',
+        tipMenu: 'Tip menu: Spin Wheel',
+      });
+    }],
+    ['template_engine/02_nested_conditionals_defaults.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_TEMPLATE_ENGINE_02__), {
+        status: 'Limitcam: OFF',
+        localized: 'Reminder',
+        fallback: 'Alias: guest',
+        missing: 'Unknown: {user.unknown}',
+      });
+    }],
+    ['template_engine/03_recursive_rendering.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_TEMPLATE_ENGINE_03__), {
+        recursive: '[Hello Foo]',
+        messageBody: 'Thanks for supporting, Foo!',
+        messageColor: '#00AA00',
+      });
+    }],
+    ['macro/01_value_basics.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_MACRO_01__), {
+        threshold: 120,
+        label: 'limitcam-ready',
+      });
+    }],
+    ['macro/02_value_alias_and_static_import.ts', (g) => {
+      assert.strictEqual(g.__EXAMPLE_MACRO_02__, 'session-3');
+    }],
+    ['macro/03_emit_basics.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_MACRO_03__), {
+        tokenGoal: 300,
+        remaining: 220,
+      });
+    }],
+    ['macro/04_valid_invalid_contexts.ts', (g) => {
+      assert.strictEqual(g.__EXAMPLE_MACRO_04_VALUE__, 60);
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_MACRO_04__), {
+        subject: 'Limitcam manager active',
+      });
+      assert.strictEqual(g.$room.subject, 'Limitcam manager active');
+    }],
+  ]);
+}
+
+function run() {
+  if (!fs.existsSync(EXAMPLES_ROOT)) {
+    throw new Error('examples directory does not exist');
+  }
+
+  const tempRoot = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'devkit-examples-'));
+  const workExamplesDir = nodePath.join(tempRoot, 'examples');
+
+  try {
+    fs.cpSync(EXAMPLES_ROOT, workExamplesDir, {recursive: true});
+    ensureAliasLinks(workExamplesDir);
+
+    const entries = listExampleEntries(workExamplesDir);
+    if (entries.length === 0) {
+      throw new Error('No example entry files found.');
+    }
+
+    const compiledByEntry = new Map();
+    for (const entryPath of entries) {
+      const relative = toPosix(nodePath.relative(workExamplesDir, entryPath));
+      const code = compileWithProjectPipeline(entryPath);
+      compiledByEntry.set(relative, code);
+    }
+
+    console.log(`[examples] compiled ${compiledByEntry.size} entry files`);
+
+    const checks = runtimeChecks();
+    for (const [entry, check] of checks.entries()) {
+      const code = compiledByEntry.get(entry);
+      if (!code) {
+        throw new Error(`Runtime check references missing compiled entry: ${entry}`);
+      }
+      const runtimeGlobal = executeCompiled(entry, code);
+      try {
+        check(runtimeGlobal);
+      } catch (error) {
+        throw new Error(`Runtime assertion failed for ${entry}: ${error.message}`);
+      }
+    }
+
+    console.log(`[examples] runtime checks passed for ${checks.size} entries`);
+
+    const compileTimeEntry = nodePath.join(workExamplesDir, 'command_system', '06_compile_time_value_intermediate.ts');
+    const macroOnly = compileMacroOnly(compileTimeEntry);
+
+    if (!(macroOnly.code.length < macroOnly.source.length)) {
+      throw new Error('compile-time VALUE example did not reduce transformed code size (macro-only check).');
+    }
+    if (macroOnly.code.includes('compileOnlyPolicyDraft')) {
+      throw new Error('compile-time VALUE example still contains compile-only identifier after macro transform.');
+    }
+    if (macroOnly.code.includes('@lib/command_system/builder')) {
+      throw new Error('compile-time VALUE example still imports builder module after macro transform.');
+    }
+    if (!macroOnly.code.includes('@lib/command_system/runtime')) {
+      throw new Error('compile-time VALUE example unexpectedly dropped runtime import.');
+    }
+
+    console.log('[examples] compile-time VALUE reduction checks passed');
+  } finally {
+    fs.rmSync(tempRoot, {recursive: true, force: true});
+  }
+}
+
+try {
+  run();
+} catch (error) {
+  console.error('[examples] validation failed');
+  console.error(error && error.stack ? error.stack : String(error));
+  process.exitCode = 1;
+}

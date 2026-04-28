@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# Make sure to recomplie the files from scratch
+set -euo pipefail
+
+# Make sure to recompile the files from scratch
 rm -rf temp
 
-# Run tests
+cleanup() {
+    rm -rf temp
+}
+trap cleanup EXIT
+
 npx ava
-
-# Delete the test files
-rm -rf temp

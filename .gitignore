@@ -3,6 +3,7 @@ temp
 
 # Release directory
 dist
+.devkit
 
 # Logs
 logs
@@ -39,3 +40,6 @@ node_modules/
 
 # JetBrains IDEs
 .idea/
+
+# Wiki Repo
+wiki/

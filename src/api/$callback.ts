@@ -1,6 +1,6 @@
 /**
  * The callback system lets you create a callback which executes a function or specified piece of code once the callback expires. You can optionally make this call repeat indefinitely (for as long as your app is running).
- * In common javascript environments, the commands setTimeout() and setInterval() are used to achieve this. These commands are not avaialble to Chaturbate Apps, and the callback system provides support for the same functionality.
+ * In common javascript environments, the commands setTimeout() and setInterval() are used to achieve this. These commands are not available to Apps, and the callback system provides support for the same functionality.
  */
 export declare class Callback {
     /** The label argument, previously given to the $callback.create() method. Available only on the Callback event handler. */

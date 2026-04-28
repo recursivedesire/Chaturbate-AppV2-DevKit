@@ -3,6 +3,25 @@
     "module": "CommonJS",
     "target": "ES6",
     "esModuleInterop": true,
-    "outDir": "temp"
-  }
+    "outDir": "temp",
+    "baseUrl": ".",
+    "paths": {
+      "@api/*": [
+        "src/api/*"
+      ],
+      "@lib/*": [
+        "src/libs/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts"
+  ],
+  "exclude": [
+    "test/fixtures/**",
+    "temp/**",
+    "dist/**",
+    "node_modules/**"
+  ]
 }
