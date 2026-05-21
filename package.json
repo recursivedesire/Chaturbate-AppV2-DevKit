@@ -1,6 +1,6 @@
 {
   "name": "cb2-devkit",
-  "version": "0.95.0",
+  "version": "0.100.0",
   "description": "Develop, test, and compile apps for the Chaturbate App v2 platform, all locally.",
   "type": "commonjs",
   "main": "index.js",

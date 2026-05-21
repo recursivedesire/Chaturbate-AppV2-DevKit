@@ -2,7 +2,7 @@
 
 Generated at: `2026-05-21T17:06:51.957Z`
 
-DevKit version: `0.95.0`
+DevKit version: `0.100.0`
 
 This file is auto-generated from `.devkit/libs-cache/minified` by `node script/lib-cache.js minified`.
 Use it to verify minified lib blobs when `DEVKIT_USE_MIN_LIBS=1` / `pnpm build:min` is used.

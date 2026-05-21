@@ -20,6 +20,7 @@ files=(
     "fanclub_join"
     "media_purchase"
     "room_status_change"
+    "shortcut"
     "tip_dialog_open"
     "tip_received"
     "user_enter"

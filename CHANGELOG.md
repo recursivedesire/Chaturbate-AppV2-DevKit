@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.100.0] - 2026-05-21
+
+Update the Chaturbate-AppV2-DevKit to match the v0.100.0 API
+- Added `$shortcut` API type for Shortcuts event handler.
+- Added `shortcut` event listener for reacting to shortcut button clicks.
+
 ## [0.95.0] - 2026-04-28
 
 No changes to the API introduced, but a major internal refactor and new features to the Chaturbate-AppV2-DevKit:
