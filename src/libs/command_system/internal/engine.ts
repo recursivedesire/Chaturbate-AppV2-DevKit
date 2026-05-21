@@ -29,7 +29,7 @@ class CommandRuntimeEngineImpl<TRoot extends AnyBuiltGroup> implements CommandRu
   }
 
   parse(input: string): ParseResult<AnyBuiltCommand> {
-    return parseCommandTokens(input, this.root, this.config?.resolver);
+    return parseCommandTokens(input, this.root, this.config?.resolver, this.config?.syntax, this.config?.inputRewriter);
   }
 
   validate(parsed: ParseResult<AnyBuiltCommand>): ValidationResult<AnyBuiltCommand> {

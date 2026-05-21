@@ -155,6 +155,7 @@ export type BuiltGroup<TChildren extends readonly AnyBuiltNode[] = readonly AnyB
   permissions: readonly string[];
   permissionMode: PermissionMode;
   children: TChildren;
+  defaultCommand?: BuiltCommand<{}, {}>;
 }>;
 
 export type AnyBuiltCommand = BuiltCommand<any, any>;
@@ -304,6 +305,8 @@ export interface CommandBuilder<TArgs extends Dict = {}, TOptions extends Dict =
 
 export interface GroupBuilder<TChildren extends readonly AnyBuiltNode[] = readonly []>
   extends CommonNodeBuilder<GroupBuilder<TChildren>, BuiltGroup<TChildren>> {
+  run(handler: CommandHandler<{}, {}>): GroupBuilder<TChildren>;
+
   command<TCommand extends AnyCommandInput>(
     command: TCommand,
   ): GroupBuilder<[...TChildren, BuiltNodeFrom<TCommand>]>;
@@ -345,9 +348,16 @@ export type CompletionOptions = {
   includeUnauthorized?: boolean;
 };
 
+export type SyntaxConfig = {
+  prefixes?: readonly string[];
+  pathSeparators?: readonly string[];
+};
+
 export type EngineConfig = {
   resolver?: ResolverOptions;
   authorization?: AuthorizationOptions;
+  syntax?: SyntaxConfig;
+  inputRewriter?: {rewrite(input: string): string};
 };
 
 export interface CommandEngine<TRoot extends AnyBuiltGroup = AnyBuiltGroup> {

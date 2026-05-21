@@ -12,6 +12,7 @@ import type {
   IntrospectionEngine,
   ResolverOptions,
   RunResult,
+  SyntaxConfig,
 } from '../types';
 
 import {
@@ -150,8 +151,80 @@ function readResolverFromEngine(engine: CommandRuntimeEngine<AnyBuiltGroup>): Re
   return config.resolver;
 }
 
+function readSyntaxFromEngine(engine: CommandRuntimeEngine<AnyBuiltGroup>): SyntaxConfig | undefined {
+  var config = engine.config;
+  if (!config) {
+    return undefined;
+  }
+  return config.syntax;
+}
+
+function splitBySeparators(value: string, separators: readonly string[]): string[] {
+  var parts = [value];
+  for (var s = 0; s < separators.length; s += 1) {
+    var sep = separators[s];
+    if (sep === ' ') {
+      continue;
+    }
+    var newParts: string[] = [];
+    for (var i = 0; i < parts.length; i += 1) {
+      var split = parts[i].split(sep);
+      for (var j = 0; j < split.length; j += 1) {
+        if (split[j] !== '') {
+          newParts.push(split[j]);
+        }
+      }
+    }
+    parts = newParts;
+  }
+  return parts;
+}
+
+function expandSyntaxPath(path: string, syntax?: SyntaxConfig): readonly string[] {
+  var tokenized = tokenize(path);
+  if (!tokenized.ok || !tokenized.tokens.length) {
+    return [];
+  }
+
+  var tokens = tokenized.tokens;
+  var firstToken = tokens[0];
+  var prefixLen = 0;
+
+  if (syntax && syntax.prefixes && syntax.prefixes.length > 0) {
+    for (var p = 0; p < syntax.prefixes.length; p += 1) {
+      if (firstToken.indexOf(syntax.prefixes[p]) === 0) {
+        prefixLen = syntax.prefixes[p].length;
+        break;
+      }
+    }
+  }
+
+  var pathSeparators: string[] = [];
+  if (syntax && syntax.pathSeparators && syntax.pathSeparators.length > 0) {
+    for (var s = 0; s < syntax.pathSeparators.length; s += 1) {
+      if (syntax.pathSeparators[s] !== ' ') {
+        pathSeparators.push(syntax.pathSeparators[s]);
+      }
+    }
+  }
+
+  var firstRemainder = firstToken.slice(prefixLen);
+  var expanded: string[];
+
+  if (pathSeparators.length > 0 && firstRemainder) {
+    expanded = splitBySeparators(firstRemainder, pathSeparators);
+  } else if (firstRemainder) {
+    expanded = [firstRemainder];
+  } else {
+    expanded = [];
+  }
+
+  return expanded.concat(tokens.slice(1));
+}
+
 export function attachIntrospection<TRoot extends AnyBuiltGroup>(engine: CommandRuntimeEngine<TRoot>): IntrospectionEngine<TRoot> {
   var resolver = readResolverFromEngine(engine as unknown as CommandRuntimeEngine<AnyBuiltGroup>);
+  var syntax = readSyntaxFromEngine(engine as unknown as CommandRuntimeEngine<AnyBuiltGroup>);
 
   return Object.assign(engine, {
     analyze(input: string, auth?: AuthContext): AnalysisResult<AnyBuiltCommand> {
@@ -193,10 +266,12 @@ export function attachIntrospection<TRoot extends AnyBuiltGroup>(engine: Command
 
     help(path?: string | readonly string[], options?: HelpOptions): string {
       var authorization = buildAuthorizationInput();
-      var parts = typeof path === 'string' ? tokenize(path) : undefined;
-      var resolvedPath = typeof path === 'string'
-        ? parts && parts.ok ? parts.tokens : []
-        : path ? path.slice() : [];
+      var resolvedPath: readonly string[];
+      if (typeof path === 'string') {
+        resolvedPath = expandSyntaxPath(path, syntax);
+      } else {
+        resolvedPath = path ? path.slice() : [];
+      }
 
       var resolved = resolvePath(engine.root, resolvedPath as readonly string[], resolver);
       if (!resolved) {
@@ -211,10 +286,12 @@ export function attachIntrospection<TRoot extends AnyBuiltGroup>(engine: Command
     },
 
     usage(path?: string | readonly string[], options?: HelpOptions): string {
-      var parts = typeof path === 'string' ? tokenize(path) : undefined;
-      var resolvedPath = typeof path === 'string'
-        ? parts && parts.ok ? parts.tokens : []
-        : path ? path.slice() : [];
+      var resolvedPath: readonly string[];
+      if (typeof path === 'string') {
+        resolvedPath = expandSyntaxPath(path, syntax);
+      } else {
+        resolvedPath = path ? path.slice() : [];
+      }
 
       var resolved = resolvePath(engine.root, resolvedPath as readonly string[], resolver);
       if (!resolved) {
@@ -230,10 +307,12 @@ export function attachIntrospection<TRoot extends AnyBuiltGroup>(engine: Command
 
     list(path?: string | readonly string[], options?: HelpOptions): readonly string[] {
       var authorization = buildAuthorizationInput();
-      var parts = typeof path === 'string' ? tokenize(path) : undefined;
-      var resolvedPath = typeof path === 'string'
-        ? parts && parts.ok ? parts.tokens : []
-        : path ? path.slice() : [];
+      var resolvedPath: readonly string[];
+      if (typeof path === 'string') {
+        resolvedPath = expandSyntaxPath(path, syntax);
+      } else {
+        resolvedPath = path ? path.slice() : [];
+      }
 
       var resolved = resolvePath(engine.root, resolvedPath as readonly string[], resolver);
       if (!resolved) {
@@ -273,19 +352,16 @@ export function attachIntrospection<TRoot extends AnyBuiltGroup>(engine: Command
     },
 
     complete(input: string, options?: CompletionOptions): readonly string[] {
-      var tokenized = tokenize(input);
-      if (!tokenized.ok) {
-        return [];
+      var expanded = expandSyntaxPath(input, syntax);
+      if (!expanded.length) {
+        return [engine.root.name];
       }
 
-      var tokens = tokenized.tokens;
+      var tokens = expanded;
       var endsWithSpace = !!input && /\s$/.test(input);
       var authorization = buildAuthorizationInput();
       var includeUnauthorized = !!(options && options.includeUnauthorized);
 
-      if (!tokens.length) {
-        return [engine.root.name];
-      }
       if (tokens.length === 1 && !endsWithSpace) {
         var rootCandidates = [engine.root.name].concat(engine.root.aliases as string[]);
         return filterStartingWith(rootCandidates, tokens[0]);

@@ -297,6 +297,13 @@ class CommandBuilderImpl<TArgs extends Dict = {}, TOptions extends Dict = {}> ex
 
 class GroupBuilderImpl<TChildren extends readonly AnyBuiltNode[] = readonly []> extends BaseNodeBuilder<BuiltGroup<TChildren>> {
   private readonly children: AnyBuiltNode[] = [];
+  private defaultHandler?: CommandHandler<{}, {}>;
+
+  run(handler: CommandHandler<{}, {}>): GroupBuilder<TChildren> {
+    this.ensureMutable();
+    this.defaultHandler = handler;
+    return this as unknown as GroupBuilder<TChildren>;
+  }
 
   command<TCommand extends AnyCommandInput>(command: TCommand): any {
     this.ensureMutable();
@@ -366,6 +373,19 @@ class GroupBuilderImpl<TChildren extends readonly AnyBuiltNode[] = readonly []> 
       return existing;
     }
     validateChildDefinitions(this.state.name, this.children);
+    var defaultCommand: BuiltCommand<{}, {}> | undefined;
+    if (this.defaultHandler) {
+      defaultCommand = deepFreeze({
+        type: 'command' as const,
+        name: '$default',
+        aliases: [] as readonly string[],
+        args: [] as readonly BuiltArg[],
+        options: [] as readonly BuiltOption[],
+        permissions: [] as readonly string[],
+        permissionMode: 'inherit' as PermissionMode,
+        handler: this.defaultHandler,
+      });
+    }
     return this.setBuilt(deepFreeze({
       type: 'group' as const,
       name: this.state.name,
@@ -374,6 +394,7 @@ class GroupBuilderImpl<TChildren extends readonly AnyBuiltNode[] = readonly []> 
       permissions: this.state.permissions.slice(),
       permissionMode: this.state.permissionMode,
       children: this.children.slice() as unknown as TChildren,
+      defaultCommand,
     }));
   }
 }

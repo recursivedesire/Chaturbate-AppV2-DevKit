@@ -6,6 +6,7 @@ import type {
   Diagnostic,
   ParseResult,
   ResolverOptions,
+  SyntaxConfig,
 } from '../types';
 
 import {
@@ -35,7 +36,32 @@ function findOptionByShortName(command: AnyBuiltCommand, shortName: string): Bui
   return undefined;
 }
 
-export function parseCommandTokens(input: string, root: AnyBuiltGroup, resolver?: ResolverOptions): ParseResult<AnyBuiltCommand> {
+function splitBySeparators(value: string, separators: readonly string[]): string[] {
+  var parts = [value];
+  for (var s = 0; s < separators.length; s += 1) {
+    var sep = separators[s];
+    if (sep === ' ') {
+      continue;
+    }
+    var newParts: string[] = [];
+    for (var i = 0; i < parts.length; i += 1) {
+      var split = parts[i].split(sep);
+      for (var j = 0; j < split.length; j += 1) {
+        if (split[j] !== '') {
+          newParts.push(split[j]);
+        }
+      }
+    }
+    parts = newParts;
+  }
+  return parts;
+}
+
+export function parseCommandTokens(input: string, root: AnyBuiltGroup, resolver?: ResolverOptions, syntax?: SyntaxConfig, inputRewriter?: {rewrite(input: string): string}): ParseResult<AnyBuiltCommand> {
+  if (inputRewriter) {
+    input = inputRewriter.rewrite(input);
+  }
+
   var tokenized = tokenize(input);
   if (tokenized.ok === false) {
     return {ok: false, input, diagnostics: tokenized.diagnostics};
@@ -46,7 +72,49 @@ export function parseCommandTokens(input: string, root: AnyBuiltGroup, resolver?
     return {ok: false, input, diagnostics: [{stage: 'parse', code: 'INVALID_PREFIX', message: 'Input is empty.'}]};
   }
 
-  var rootMatch = resolveNodeToken(tokens[0], [root], resolver);
+  var firstToken = tokens[0];
+  var prefixLen = 0;
+
+  if (syntax && syntax.prefixes && syntax.prefixes.length > 0) {
+    for (var p = 0; p < syntax.prefixes.length; p += 1) {
+      if (firstToken.indexOf(syntax.prefixes[p]) === 0) {
+        prefixLen = syntax.prefixes[p].length;
+        break;
+      }
+    }
+    if (!prefixLen) {
+      return {ok: false, input, diagnostics: [{stage: 'parse', code: 'INVALID_PREFIX', message: 'Input does not start with a valid command prefix.'}]};
+    }
+  }
+
+  var pathSeparators: string[] = [];
+  if (syntax && syntax.pathSeparators && syntax.pathSeparators.length > 0) {
+    for (var s = 0; s < syntax.pathSeparators.length; s += 1) {
+      if (syntax.pathSeparators[s] !== ' ') {
+        pathSeparators.push(syntax.pathSeparators[s]);
+      }
+    }
+  }
+
+  var expandedFirst: string[];
+  var firstRemainder = firstToken.slice(prefixLen);
+
+  if (pathSeparators.length > 0 && firstRemainder) {
+    expandedFirst = splitBySeparators(firstRemainder, pathSeparators);
+  } else if (firstRemainder) {
+    expandedFirst = [firstRemainder];
+  } else {
+    expandedFirst = [];
+  }
+
+  if (!expandedFirst.length) {
+    return {ok: false, input, diagnostics: [{stage: 'parse', code: 'INVALID_PREFIX', message: 'Command token is empty after stripping prefix.'}]};
+  }
+
+  var pathTokens = expandedFirst.concat(tokens.slice(1));
+  var N = expandedFirst.length;
+
+  var rootMatch = resolveNodeToken(pathTokens[0], [root], resolver);
   if ('diagnostics' in rootMatch) {
     return {ok: false, input, diagnostics: rootMatch.diagnostics};
   }
@@ -57,8 +125,8 @@ export function parseCommandTokens(input: string, root: AnyBuiltGroup, resolver?
   var target: AnyBuiltCommand | undefined;
   var unresolvedDiagnostics: Diagnostic[] | undefined;
 
-  while (cursor < tokens.length) {
-    var resolved = resolveNodeToken(tokens[cursor], currentGroup.children, resolver);
+  while (cursor < pathTokens.length) {
+    var resolved = resolveNodeToken(pathTokens[cursor], currentGroup.children, resolver);
     if ('diagnostics' in resolved) {
       unresolvedDiagnostics = resolved.diagnostics;
       break;
@@ -76,6 +144,23 @@ export function parseCommandTokens(input: string, root: AnyBuiltGroup, resolver?
   }
 
   if (!target) {
+    var lastNode = chain[chain.length - 1];
+    if (!unresolvedDiagnostics && cursor === pathTokens.length && lastNode.type === 'group' && lastNode.defaultCommand) {
+      target = lastNode.defaultCommand;
+      chain.push(target);
+      return {
+        ok: true,
+        input,
+        path: chainToPath(chain.slice(0, -1)),
+        target,
+        chain: chain.slice(),
+        tokens: tokens.slice(),
+        rawArgs: [],
+        rawOptions: deepFreeze({}),
+        optionTerminatorUsed: false,
+      };
+    }
+
     return {
       ok: false,
       input,
@@ -83,15 +168,18 @@ export function parseCommandTokens(input: string, root: AnyBuiltGroup, resolver?
         stage: 'parse',
         code: 'UNKNOWN_COMMAND',
         message: 'No executable command was found in input.',
-        path: tokens.slice(0, cursor),
+        path: pathTokens.slice(0, cursor),
       }],
     };
   }
 
+  var cmdIdx = cursor - 1;
+  var remainingStart = cmdIdx < N ? 1 : cmdIdx - N + 2;
+  var remaining = tokens.slice(remainingStart);
+
   var rawArgs: string[] = [];
   var rawOptions: Record<string, string | boolean | readonly string[]> = {};
   var optionTerminatorUsed = false;
-  var remaining = tokens.slice(cursor);
 
   for (var i = 0; i < remaining.length; i += 1) {
     var token = remaining[i];

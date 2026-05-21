@@ -18,6 +18,10 @@ These examples follow one evolving **Limitcam Manager** CLI from basic usage to 
   - compile-time policy object via `VALUE`, consumed by runtime-only command engine
 - `07_compat_inlining_limitations.ts`
   - compat/inlining demonstration with local modules and side-effect import
+- `08_syntax_config.ts`
+  - configurable command prefixes (`/`, `!`), path separators (`.`, `/`), and optional InputRewriter shortcut mapping
+- `09_group_default_action.ts`
+  - group default action via `.run(handler)` on the group itself, fired when input resolves exactly to the group; child commands take precedence
 
 ## Compile-time VALUE intent
 

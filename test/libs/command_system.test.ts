@@ -2,6 +2,7 @@ import test from 'ava';
 import proxyquire from 'proxyquire';
 
 import {User} from '@api/$user';
+import {InputRewriter} from '@lib/input_rewriter';
 
 const $user: User = {username: 'Foo', colorGroup: 'f'} as User;
 (globalThis as { $user?: User }).$user = $user;
@@ -391,4 +392,248 @@ test('attachIntrospection adds help/list/complete/analyze methods to runtime eng
   t.true(analysis.executable);
   const executed = cli.executeAnalysis(analysis);
   t.true(executed.ok);
+});
+
+test('syntax: default slash prefix still works', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {syntax: {prefixes: ['/']}});
+
+  t.true(cli.parse('/cli status').ok);
+  t.true(cli.run('/cli status').ok);
+  t.is(cli.run('/cli status').result?.message, 'status ok');
+});
+
+test('syntax: multiple prefixes /, !, ?, >', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {syntax: {prefixes: ['/', '!', '?', '>']}});
+
+  t.true(cli.parse('/cli status').ok);
+  t.true(cli.parse('!cli status').ok);
+  t.true(cli.parse('?cli status').ok);
+  t.true(cli.parse('>cli status').ok);
+  t.is(cli.run('/cli status').result?.message, 'status ok');
+  t.is(cli.run('!cli status').result?.message, 'status ok');
+  t.is(cli.run('?cli status').result?.message, 'status ok');
+  t.is(cli.run('>cli status').result?.message, 'status ok');
+});
+
+test('syntax: invalid prefix returns error', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {syntax: {prefixes: ['/']}});
+
+  t.false(cli.parse('@cli status').ok);
+  if (!cli.parse('@cli status').ok) {
+    t.is(cli.parse('@cli status').diagnostics[0].code, 'INVALID_PREFIX');
+  }
+});
+
+test('syntax: dot-separated path /cli.status', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {syntax: {prefixes: ['/'], pathSeparators: [' ', '.', '/']}});
+
+  t.true(cli.parse('/cli.status').ok);
+  t.is(cli.run('/cli.status').result?.message, 'status ok');
+});
+
+test('syntax: slash-separated path /cli/status', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {syntax: {prefixes: ['/'], pathSeparators: [' ', '.', '/']}});
+
+  t.true(cli.parse('/cli/status').ok);
+  t.is(cli.run('/cli/status').result?.message, 'status ok');
+});
+
+test('syntax: space, dot, and slash separators are equivalent', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {syntax: {prefixes: ['/'], pathSeparators: [' ', '.', '/']}});
+
+  t.is(cli.run('/cli status').result?.message, 'status ok');
+  t.is(cli.run('/cli.status').result?.message, 'status ok');
+  t.is(cli.run('/cli/status').result?.message, 'status ok');
+});
+
+test('syntax: path separators do not break arg values containing dots', t => {
+  const cli = buildCli(group('cli').command(
+    command('read')
+      .arg('file', stringArg())
+      .run(({args}) => ({success: true, message: String(args.file)})),
+  ), {syntax: {prefixes: ['/'], pathSeparators: [' ', '.', '/']}});
+
+  const result = cli.run('/cli.read config.json');
+  t.true(result.ok);
+  t.is(result.result?.message, 'config.json');
+});
+
+test('syntax: path separators do not break option values', t => {
+  const cli = buildCli(group('cli').command(
+    command('echo')
+      .option('file', stringOption().required())
+      .run(({options}) => ({success: true, message: String(options.file)})),
+  ), {syntax: {prefixes: ['/'], pathSeparators: [' ', '.', '/']}});
+
+  const result = cli.run('/cli.echo --file config.json');
+  t.true(result.ok);
+  t.is(result.result?.message, 'config.json');
+});
+
+test('syntax: optional InputRewriter exact command rewrite', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {
+    syntax: {prefixes: ['/']},
+    inputRewriter: new InputRewriter()
+      .exact('/bar', '/cli status'),
+  });
+
+  t.is(cli.run('/bar').result?.message, 'status ok');
+});
+
+test('syntax: optional InputRewriter command-to-text rewrite results in non-command', t => {
+  const cli = buildCli(group('cli').command(
+    command('status').run(() => 'status ok'),
+  ), {
+    syntax: {prefixes: ['/']},
+    inputRewriter: new InputRewriter()
+      .exact('/hi', 'hello world'),
+  });
+
+  const parsed = cli.parse('/hi');
+  t.false(parsed.ok);
+});
+
+test('group default: group without default still behaves as before', t => {
+  const cli = buildCli(group('/cli').command(
+    command('status').run(() => 'status ok'),
+  ));
+
+  t.true(cli.run('/cli status').ok);
+  t.false(cli.run('/cli').ok);
+  t.false(cli.run('/cli unknown').ok);
+});
+
+test('group default: runs when input resolves exactly to group', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .run(() => 'Main menu')
+      .command(command('special').run(() => 'Special')),
+  ));
+
+  const menuResult = cli.run('/cli menu');
+  t.true(menuResult.ok);
+  t.is(menuResult.result?.message, 'Main menu');
+});
+
+test('group default: receives path equal to group path', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .run(({path}) => path.join(' ')),
+  ));
+
+  const result = cli.run('/cli menu');
+  t.true(result.ok);
+  t.is(result.result?.message, '/cli menu');
+});
+
+test('group default: receives rawInput', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .run(({rawInput}) => rawInput),
+  ));
+
+  const result = cli.run('/cli menu');
+  t.true(result.ok);
+  t.is(result.result?.message, '/cli menu');
+});
+
+test('group default: child command still takes precedence', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .run(() => 'Main menu')
+      .command(command('special').run(() => 'Special')),
+  ));
+
+  t.is(cli.run('/cli menu').result?.message, 'Main menu');
+  t.is(cli.run('/cli menu special').result?.message, 'Special');
+});
+
+test('group default: unknown child does not fall back to default', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .run(() => 'Main menu')
+      .command(command('special').run(() => 'Special')),
+  ));
+
+  const result = cli.run('/cli menu unknown');
+  t.false(result.ok);
+  t.is(result.diagnostics[0].code, 'UNKNOWN_COMMAND');
+});
+
+test('group default: works with syntax path separators', t => {
+  const cli = buildCli(group('cli').group(
+    group('menu')
+      .run(() => 'Main menu')
+      .command(command('special').run(() => 'Special')),
+  ), {syntax: {prefixes: ['/'], pathSeparators: [' ', '.', '/']}});
+
+  t.is(cli.run('/cli.menu').result?.message, 'Main menu');
+  t.is(cli.run('/cli/menu').result?.message, 'Main menu');
+  t.is(cli.run('/cli.menu.special').result?.message, 'Special');
+  t.is(cli.run('/cli/menu/special').result?.message, 'Special');
+});
+
+test('group default: works with alternate prefixes', t => {
+  const cli = buildCli(group('cli').group(
+    group('menu')
+      .run(() => 'Main menu')
+      .command(command('special').run(() => 'Special')),
+  ), {syntax: {prefixes: ['/', '!']}});
+
+  t.is(cli.run('/cli menu').result?.message, 'Main menu');
+  t.is(cli.run('!cli menu').result?.message, 'Main menu');
+});
+
+test('group default: respects group permissions', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .permissions('o')
+      .run(() => 'Main menu'),
+  ));
+
+  const denied = cli.run('/cli menu');
+  t.false(denied.ok);
+  t.is(denied.diagnostics[0].code, 'PERMISSION_DENIED');
+});
+
+test('group default: hidden default command not in list/help/complete', t => {
+  const cli = buildCli(group('/cli').group(
+    group('menu')
+      .run(() => 'Main menu')
+      .command(command('special').run(() => 'Special')),
+  ));
+
+  const helpOutput = cli.help('/cli menu');
+  t.false(helpOutput.includes('$default'));
+
+  const listing = cli.list('/cli menu');
+  t.deepEqual(listing, ['special']);
+
+  const suggestions = cli.complete('/cli menu ');
+  t.deepEqual(suggestions, ['special']);
+});
+
+test('group default: build output remains frozen', t => {
+  const built = group('test')
+    .run(() => 'default')
+    .command(command('child').run(() => 'child'))
+    .build();
+
+  t.true(Object.isFrozen(built));
+  t.true(built.defaultCommand !== undefined);
+  t.true(Object.isFrozen(built.defaultCommand!));
 });

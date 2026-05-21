@@ -7,6 +7,8 @@ This folder contains progressive, runnable TypeScript examples for each library:
 - `template_engine` (welcome/notice rendering)
 - `macro` (compile-time VALUE/EMIT utilities)
 - `data_processing` (minimal base64/hash utilities)
+- `smart_notice_timer` (deterministic notice scheduling with duplicate suppression)
+- `input_rewriter` (raw input shortcuts and rewrites)
 
 ## Quick Start
 

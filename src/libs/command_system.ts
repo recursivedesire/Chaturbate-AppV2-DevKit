@@ -75,6 +75,7 @@ export type {
   ResolverOptions,
   RunResult,
   Simplify,
+  SyntaxConfig,
   ValidationFailure,
   ValidationResult,
   ValidatedCommand,

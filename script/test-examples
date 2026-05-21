@@ -567,6 +567,39 @@ function runtimeChecks() {
       });
       assert.strictEqual(g.$room.subject, 'Limitcam manager active');
     }],
+    ['command_system/08_syntax_config.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_08__), {
+        slashPrefix: 'status ok',
+        bangPrefix: 'status ok',
+        dotPath: 'start ok',
+        slashPath: 'start ok',
+        rewriteShortcut: 'start ok',
+      });
+    }],
+    ['command_system/09_group_default_action.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_COMMAND_SYSTEM_09__), {
+        defaultAction: {active: false, users: []},
+        childCommand: 'status ok',
+      });
+    }],
+    ['input_rewriter/01_basic_rewrites.ts', (g) => {
+      assert.deepStrictEqual(toPlain(g.__EXAMPLE_INPUT_REWRITER_01__), {
+        menu: '/notice Tip menu: Spin Wheel',
+        greeting: 'Welcome Foo!',
+        vip: '/limitcam add alice',
+        notice: '/notice Goal reached',
+        unchanged: 'normal chat message',
+      });
+    }],
+    ['smart_notice_timer/01_basic_usage.ts', (g) => {
+      const r = g.__EXAMPLE_SMART_NOTICE_TIMER_01__;
+      assert.strictEqual(r.user, 'Foo');
+      assert.deepStrictEqual(toPlain(r.pendingCategories), ['custom', 'goal', 'menu']);
+      assert.strictEqual(r.activeCount, 3);
+      assert.strictEqual(r.ledgerSize, 4);
+      assert.strictEqual(r.userSlot, 0);
+      assert.strictEqual(r.noticesSent, 3);
+    }],
   ]);
 }
 
