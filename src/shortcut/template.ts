@@ -7,6 +7,11 @@ import {$room} from "@api/$room";
 import {$settings} from "@api/$settings";
 import {$shortcut} from "@api/$shortcut";
 import {$user} from "@api/$user";
-import {} from "./shared_code";
+import {} from "../events/shared_code";
 
+/**
+ * Copy and rename this file to create a new shortcut entry, e.g.:
+ *   shortcut/reset_goal.ts
+ */
+ 
 /** React when a shortcut button is clicked. */

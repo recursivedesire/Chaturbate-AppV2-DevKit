@@ -1,10 +1,17 @@
 #!/bin/bash
+set -euo pipefail
 
 # Clearing the dist folder
 rm -rf dist
 
-# Compiling each file listed in apiFiles.txt
-files=(
+EVENTS_ROOT="src/events"
+OVERLAY_ROOT="src/broadcast_overlay"
+SHORTCUT_ROOT="src/shortcut"
+
+# ---------------------------------------------------------------
+# 1. Compile event tab files (explicit list — no accidental entries)
+# ---------------------------------------------------------------
+event_files=(
     "shared_code"
     "app_settings_change"
     "app_start"
@@ -12,15 +19,12 @@ files=(
     "broadcast_start"
     "broadcast_stop"
     "broadcast_panel_update"
-    "broadcast_overlay"
-    "broadcast_overlay_shared_code"
     "callback"
     "chat_message"
     "chat_message_transform"
     "fanclub_join"
     "media_purchase"
     "room_status_change"
-    "shortcut"
     "tip_dialog_open"
     "tip_received"
     "user_enter"
@@ -28,8 +32,60 @@ files=(
     "user_leave"
     "user_unfollow"
 )
-printf "src/%s.ts\n" "${files[@]}" | xargs npx babel --out-dir dist --extensions '.ts'
-cp "src/broadcast_overlay.html" "dist/broadcast_overlay.html"
+mkdir -p dist/events
+printf "$EVENTS_ROOT/%s.ts\n" "${event_files[@]}" | xargs npx babel --out-dir dist/events --extensions '.ts'
 
+# ---------------------------------------------------------------
+# 2. Build broadcast overlays
+# ---------------------------------------------------------------
+mkdir -p dist/broadcast_overlay
+
+# Compile overlay shared code
+npx babel "$OVERLAY_ROOT/shared_code.ts" --out-dir dist/broadcast_overlay --extensions '.ts'
+
+# Build real overlay entries (skip template.* and shared_code.ts)
+for ts_file in "$OVERLAY_ROOT"/*.ts; do
+    [ -f "$ts_file" ] || continue
+    base=$(basename "$ts_file" .ts)
+    [ "$base" = "template" ] && continue
+    [ "$base" = "shared_code" ] && continue
+
+    html_file="$OVERLAY_ROOT/$base.html"
+    if [ ! -f "$html_file" ]; then
+        echo "Error: Missing broadcast overlay HTML for $ts_file; expected $html_file" >&2
+        exit 1
+    fi
+
+    npx babel "$ts_file" --out-dir "dist/broadcast_overlay" --extensions '.ts'
+    cp "$html_file" "dist/broadcast_overlay/$base.html"
+done
+
+# Validate no orphan overlay HTML files
+for html_file in "$OVERLAY_ROOT"/*.html; do
+    [ -f "$html_file" ] || continue
+    base=$(basename "$html_file" .html)
+    [ "$base" = "template" ] && continue
+
+    ts_file="$OVERLAY_ROOT/$base.ts"
+    if [ ! -f "$ts_file" ]; then
+        echo "Error: Missing broadcast overlay TS for $html_file; expected $ts_file" >&2
+        exit 1
+    fi
+done
+
+# ---------------------------------------------------------------
+# 3. Build shortcuts
+# ---------------------------------------------------------------
+mkdir -p dist/shortcut
+for ts_file in "$SHORTCUT_ROOT"/*.ts; do
+    [ -f "$ts_file" ] || continue
+    base=$(basename "$ts_file" .ts)
+    [ "$base" = "template" ] && continue
+
+    npx babel "$ts_file" --out-dir "dist/shortcut" --extensions '.ts'
+done
+
+# ---------------------------------------------------------------
 # Delete empty files from the dist folder
+# ---------------------------------------------------------------
 find dist/ -type f -empty -delete

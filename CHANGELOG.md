@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.100.0] - 2026-05-22
+
+Refactored source/build layout to support multiple broadcast overlays and shortcuts:
+- Moved event handler files from `src/*.ts` into `src/events/`.
+- Replaced singleton `src/broadcast_overlay.ts` with `src/broadcast_overlay/` directory supporting named overlay entries (`.ts` + `.html` pairs).
+- Replaced singleton `src/shortcut.ts` with `src/shortcut/` directory supporting named shortcut entries.
+- Added build validation: overlay `.ts`/`.html` matching basename requirement enforced at build time.
+- Added `template.*` starter files for overlays and shortcuts (skipped by build).
+- Updated build output layout: `dist/events/`, `dist/broadcast_overlay/`, `dist/shortcut/`.
+- Updated docs to reflect the new grouped source and output layout.
+
 ## [0.100.0] - 2026-05-21
 
 Update the Chaturbate-AppV2-DevKit to match the v0.100.0 API
